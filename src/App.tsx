@@ -17,7 +17,8 @@ import {
   HelpCircle,
   Eye,
   EyeOff,
-  MoveHorizontal
+  MoveHorizontal,
+  Compass
 } from 'lucide-react';
 
 export default function App() {
@@ -26,19 +27,61 @@ export default function App() {
   const [activeHotspot, setActiveHotspot] = useState<Hotspot | null>(null);
   const [showHotspots, setShowHotspots] = useState<boolean>(true);
 
+  // Device Gyroscope state
+  const [isGyroActive, setIsGyroActive] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   // Camera orientation state
   const [yaw, setYaw] = useState<number>(0);
   const [pitch, setPitch] = useState<number>(0);
-  const [fov, setFov] = useState<number>(65);
+  const [fov, setFov] = useState<number>(60);
 
   // Interactive triggers
   const [resetCount, setResetCount] = useState<number>(0);
   const [zoomInCount, setZoomInCount] = useState<number>(0);
   const [zoomOutCount, setZoomOutCount] = useState<number>(0);
 
-  // User interaction tracking (to fade out "Drag to explore" hint)
+  // User interaction tracking (to fade out hint)
   const [hasInteracted, setHasInteracted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Show temporary toast message
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((current) => (current === msg ? null : current));
+    }, 3800);
+  };
+
+  // Gyroscope toggle with iOS permission handling
+  const toggleGyro = async () => {
+    if (!isGyroActive) {
+      if (
+        typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function'
+      ) {
+        try {
+          const res = await (DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission();
+          if (res === 'granted') {
+            setIsGyroActive(true);
+            setHasInteracted(true);
+            triggerToast('Gyroscope Active • Rotate your device to look around');
+          } else {
+            triggerToast('Motion sensor permission was denied');
+          }
+        } catch {
+          triggerToast('Device motion permission could not be requested');
+        }
+      } else {
+        setIsGyroActive(true);
+        setHasInteracted(true);
+        triggerToast('Gyroscope Active • Rotate your device to look around');
+      }
+    } else {
+      setIsGyroActive(false);
+      triggerToast('Gyroscope paused • Drag to explore');
+    }
+  };
 
   // Heading update callback
   const handleHeadingChange = useCallback((newYaw: number, newPitch: number, newFov: number) => {
@@ -94,6 +137,10 @@ export default function App() {
         zoomInTrigger={zoomInCount}
         zoomOutTrigger={zoomOutCount}
         showHotspots={showHotspots}
+        isGyroActive={isGyroActive}
+        onGyroSensorDetected={() => {
+          // auto confirmed sensor detection
+        }}
       />
 
       {/* TOP BAR OVERLAY */}
@@ -211,6 +258,36 @@ export default function App() {
         </div>
       </header>
 
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 76,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 60,
+            padding: '8px 18px',
+            borderRadius: 24,
+            background: 'rgba(20, 14, 11, 0.92)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(229, 168, 75, 0.4)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+            color: '#FAF6F0',
+            fontSize: '0.8rem',
+            fontWeight: 500,
+            letterSpacing: '0.02em',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            animation: 'fadeInDown 0.3s ease'
+          }}
+        >
+          <Compass size={15} style={{ color: '#E5A84B' }} />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* BOTTOM OVERLAY */}
       <footer
         style={{
@@ -247,13 +324,17 @@ export default function App() {
               borderRadius: 20,
               fontSize: '0.75rem',
               color: 'var(--color-warm-beige)',
-              opacity: hasInteracted ? 0.35 : 0.95,
+              opacity: hasInteracted ? 0.45 : 0.95,
               transition: 'opacity 0.6s ease',
               width: 'fit-content'
             }}
           >
             <MoveHorizontal size={15} style={{ color: '#E5A84B' }} />
-            <span>Drag horizontally to explore • Pinch or scroll to zoom</span>
+            <span>
+              {isGyroActive
+                ? 'Device motion active • Move device or drag • Pinch to zoom'
+                : 'Drag horizontally or tap Gyro to explore • Pinch to zoom'}
+            </span>
           </div>
 
           {/* Compass / Orientation indicator */}
@@ -274,6 +355,39 @@ export default function App() {
             gap: 8
           }}
         >
+          {/* Gyroscope Motion Tracking Button */}
+          <button
+            onClick={toggleGyro}
+            className="glass-pill"
+            title={isGyroActive ? 'Disable Device Gyroscope' : 'Follow Device Motion (Gyroscope)'}
+            style={{
+              padding: '0 14px',
+              height: 38,
+              borderRadius: 20,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              color: isGyroActive ? '#FFFFFF' : 'var(--color-ivory)',
+              background: isGyroActive ? 'linear-gradient(135deg, #D46129 0%, #A84116 100%)' : undefined,
+              border: isGyroActive ? '1px solid rgba(255, 230, 200, 0.45)' : '1px solid rgba(229, 168, 75, 0.3)',
+              boxShadow: isGyroActive
+                ? '0 2px 10px rgba(0,0,0,0.4), 0 0 16px rgba(212, 97, 41, 0.5), inset 0 1px 1px rgba(255,255,255,0.3)'
+                : undefined,
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              transition: 'all 0.25s ease'
+            }}
+          >
+            <Compass
+              size={15}
+              style={{
+                color: isGyroActive ? '#FFE8D6' : '#E5A84B'
+              }}
+            />
+            <span>{isGyroActive ? 'Gyro Active' : 'Gyro'}</span>
+          </button>
+
           {/* Zoom In */}
           <button
             onClick={() => setZoomInCount((c) => c + 1)}
@@ -334,7 +448,7 @@ export default function App() {
             }}
           >
             <RotateCcw size={15} style={{ color: '#E5A84B' }} />
-            <span>Reset View</span>
+            <span>Reset</span>
           </button>
 
           {/* Fullscreen Toggle */}
