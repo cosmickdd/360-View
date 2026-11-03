@@ -208,64 +208,7 @@ export const ProjectionAnalysisModal: React.FC<ProjectionAnalysisModalProps> = (
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* Mode 1: Curved Cylinder */}
-          <div
-            onClick={() => onSelectMode('curved')}
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              border: `2px solid ${currentMode === 'curved' ? '#E5A84B' : 'rgba(238, 219, 204, 0.15)'}`,
-              background: currentMode === 'curved' ? 'rgba(229, 168, 75, 0.15)' : 'rgba(0,0,0,0.25)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 12,
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <div
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: '50%',
-                border: `2px solid ${currentMode === 'curved' ? '#E5A84B' : 'rgba(238, 219, 204, 0.4)'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: 2
-              }}
-            >
-              {currentMode === 'curved' && (
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#E5A84B' }} />
-              )}
-            </div>
-
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#FAF6F0' }}>
-                  Curved Cylindrical Panorama
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.68rem',
-                    padding: '2px 8px',
-                    borderRadius: 10,
-                    background: 'rgba(129, 199, 132, 0.25)',
-                    color: '#81C784',
-                    fontWeight: 600
-                  }}
-                >
-                  RECOMMENDED
-                </span>
-              </div>
-              <p style={{ fontSize: '0.78rem', color: 'var(--color-sandstone)', marginTop: 4, lineHeight: 1.45 }}>
-                Preserves original architectural proportions without polar warping. Features smooth horizontal
-                panning across the courtyard with natural bounded exploration.
-              </p>
-            </div>
-          </div>
-
-          {/* Mode 2: Inward Sphere */}
+          {/* Mode 1: Inward 360° Sphere (Primary / Default) */}
           <div
             onClick={() => onSelectMode('sphere')}
             style={{
@@ -302,10 +245,67 @@ export const ProjectionAnalysisModal: React.FC<ProjectionAnalysisModalProps> = (
                 <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#FAF6F0' }}>
                   Inward 360° Spherical Projection
                 </span>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    padding: '2px 8px',
+                    borderRadius: 10,
+                    background: 'rgba(212, 97, 41, 0.3)',
+                    border: '1px solid rgba(229, 168, 75, 0.4)',
+                    color: '#E5A84B',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em'
+                  }}
+                >
+                  360° IMMERSIVE
+                </span>
               </div>
               <p style={{ fontSize: '0.78rem', color: 'var(--color-sandstone)', marginTop: 4, lineHeight: 1.45 }}>
-                Wraps the image inside a Three.js sphere with inverted normals for continuous 360° rotation.
-                Ready for drop-in replacement when an authentic 360° equirectangular HDRI is provided.
+                Wraps the courtyard inside a continuous Three.js sphere with inverted normals for seamless 360° exploration in all directions.
+              </p>
+            </div>
+          </div>
+
+          {/* Mode 2: Curved Cylinder */}
+          <div
+            onClick={() => onSelectMode('curved')}
+            style={{
+              padding: 14,
+              borderRadius: 12,
+              border: `2px solid ${currentMode === 'curved' ? '#E5A84B' : 'rgba(238, 219, 204, 0.15)'}`,
+              background: currentMode === 'curved' ? 'rgba(229, 168, 75, 0.15)' : 'rgba(0,0,0,0.25)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                border: `2px solid ${currentMode === 'curved' ? '#E5A84B' : 'rgba(238, 219, 204, 0.4)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 2
+              }}
+            >
+              {currentMode === 'curved' && (
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#E5A84B' }} />
+              )}
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#FAF6F0' }}>
+                  Curved Cylindrical Panorama
+                </span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--color-sandstone)', marginTop: 4, lineHeight: 1.45 }}>
+                Preserves original architectural proportions on an expansive 260° cylindrical viewing surface with smooth bounded horizontal exploration.
               </p>
             </div>
           </div>

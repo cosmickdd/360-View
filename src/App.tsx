@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [projectionMode, setProjectionMode] = useState<ProjectionMode>('curved');
+  const [projectionMode, setProjectionMode] = useState<ProjectionMode>('sphere');
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState<boolean>(false);
   const [activeHotspot, setActiveHotspot] = useState<Hotspot | null>(null);
   const [showHotspots, setShowHotspots] = useState<boolean>(true);
