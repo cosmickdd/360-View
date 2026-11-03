@@ -18,20 +18,23 @@ import {
   Eye,
   EyeOff,
   MoveHorizontal,
-  Compass
+  Compass,
+  Smartphone
 } from 'lucide-react';
 
 export default function App() {
+  // Default to 360° Sphere mode as requested
   const [projectionMode, setProjectionMode] = useState<ProjectionMode>('sphere');
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState<boolean>(false);
   const [activeHotspot, setActiveHotspot] = useState<Hotspot | null>(null);
   const [showHotspots, setShowHotspots] = useState<boolean>(true);
 
-  // Device Gyroscope state
+  // Device Gyroscope & Mobile detection
   const [isGyroActive, setIsGyroActive] = useState<boolean>(false);
+  const [isTouchDevice, setIsTouchDevice] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Camera orientation state
+  // Camera orientation state (degrees)
   const [yaw, setYaw] = useState<number>(0);
   const [pitch, setPitch] = useState<number>(0);
   const [fov, setFov] = useState<number>(60);
@@ -45,6 +48,16 @@ export default function App() {
   const [hasInteracted, setHasInteracted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
+  // Detect mobile / touch capability
+  useEffect(() => {
+    const isTouch =
+      typeof window !== 'undefined' &&
+      (('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        window.innerWidth <= 820);
+    setIsTouchDevice(isTouch);
+  }, []);
+
   // Show temporary toast message
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -53,9 +66,20 @@ export default function App() {
     }, 3800);
   };
 
-  // Gyroscope toggle with iOS permission handling
+  // Gyroscope toggle with iOS permission & secure context handling
   const toggleGyro = async () => {
     if (!isGyroActive) {
+      // Check if running on insecure HTTP on a remote device
+      if (
+        typeof window !== 'undefined' &&
+        window.isSecureContext === false &&
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1'
+      ) {
+        triggerToast('Sensors require HTTPS (Vercel) to work on mobile browsers');
+      }
+
+      // iOS 13+ permission request
       if (
         typeof DeviceOrientationEvent !== 'undefined' &&
         typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function'
@@ -65,21 +89,25 @@ export default function App() {
           if (res === 'granted') {
             setIsGyroActive(true);
             setHasInteracted(true);
-            triggerToast('Gyroscope Active • Rotate your device to look around');
+            triggerToast('360° Gyroscope Active • Rotate phone to explore');
           } else {
-            triggerToast('Motion sensor permission was denied');
+            triggerToast('Motion sensor permission was denied in browser');
           }
         } catch {
-          triggerToast('Device motion permission could not be requested');
+          // If requestPermission fails or was already allowed, attempt enabling
+          setIsGyroActive(true);
+          setHasInteracted(true);
+          triggerToast('360° Gyroscope Active • Rotate phone to explore');
         }
       } else {
+        // Android Chrome & standard browsers
         setIsGyroActive(true);
         setHasInteracted(true);
-        triggerToast('Gyroscope Active • Rotate your device to look around');
+        triggerToast('360° Gyroscope Active • Rotate phone to explore');
       }
     } else {
       setIsGyroActive(false);
-      triggerToast('Gyroscope paused • Drag to explore');
+      triggerToast('Gyroscope paused • Drag with finger to explore');
     }
   };
 
@@ -270,6 +298,37 @@ export default function App() {
         </div>
       )}
 
+      {/* PROMINENT MOBILE FLOATING GYRO PROMPT */}
+      {isTouchDevice && !isGyroActive && (
+        <button
+          onClick={toggleGyro}
+          style={{
+            position: 'absolute',
+            bottom: 84,
+            left: '50%',
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 22px',
+            borderRadius: 30,
+            background: 'linear-gradient(135deg, #D46129 0%, #A84116 100%)',
+            border: '1.5px solid rgba(255, 230, 200, 0.6)',
+            color: '#FFFFFF',
+            fontFamily: 'var(--font-sans)',
+            fontSize: '0.84rem',
+            fontWeight: 700,
+            letterSpacing: '0.03em',
+            cursor: 'pointer',
+            animation: 'pulseGlow 2.5s infinite ease-in-out',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <Smartphone size={17} style={{ color: '#FFE8D6' }} />
+          <span>Enable 360° Phone Motion</span>
+        </button>
+      )}
+
       {/* BOTTOM OVERLAY */}
       <footer className="app-footer">
         {/* Bottom-Left: "Drag to explore" and Compass */}
@@ -279,7 +338,10 @@ export default function App() {
             yaw={yaw}
             pitch={pitch}
             fov={fov}
-            onReset={() => setResetCount((c) => c + 1)}
+            onReset={() => {
+              setResetCount((c) => c + 1);
+              triggerToast('Re-centered on Central Vrindavan');
+            }}
           />
 
           {/* Helper hint */}
@@ -301,7 +363,7 @@ export default function App() {
             <MoveHorizontal size={14} style={{ color: '#E5A84B', flexShrink: 0 }} />
             <span>
               {isGyroActive
-                ? 'Device motion active • Move device or drag'
+                ? '360° Motion active • Move device or drag'
                 : 'Drag or tap Gyro to explore • Pinch to zoom'}
             </span>
           </div>
@@ -345,7 +407,10 @@ export default function App() {
 
           {/* Reset Camera to Center */}
           <button
-            onClick={() => setResetCount((c) => c + 1)}
+            onClick={() => {
+              setResetCount((c) => c + 1);
+              triggerToast('Re-centered on Central Vrindavan');
+            }}
             className="glass-pill"
             title="Reset to Central Sanctum"
             style={{

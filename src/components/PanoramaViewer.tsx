@@ -61,30 +61,41 @@ export const COURTYARD_HOTSPOTS: Hotspot[] = [
   }
 ];
 
-// Quaternion Math helpers for Device Gyroscope
-const zee = new THREE.Vector3(0, 0, 1);
-const euler = new THREE.Euler();
-const q0 = new THREE.Quaternion();
-const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+// Reusable 3D Math Vectors & Quaternions
+const _zee = new THREE.Vector3(0, 0, 1);
+const _euler = new THREE.Euler();
+const _q0 = new THREE.Quaternion();
+const _q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2 around X axis
+const _worldY = new THREE.Vector3(0, 1, 0);
 
-function getDeviceDirection(alpha: number, beta: number, gamma: number, orient: number) {
-  const alphaRad = THREE.MathUtils.degToRad(-alpha);
+// Convert W3C Device Orientation (alpha, beta, gamma, screenOrientation) to Three.js Quaternion
+function computeDeviceQuaternion(
+  alpha: number,
+  beta: number,
+  gamma: number,
+  orientDeg: number,
+  out: THREE.Quaternion
+) {
+  const alphaRad = THREE.MathUtils.degToRad(alpha);
   const betaRad = THREE.MathUtils.degToRad(beta);
-  const gammaRad = THREE.MathUtils.degToRad(gamma);
-  const orientRad = THREE.MathUtils.degToRad(orient);
+  const gammaRad = THREE.MathUtils.degToRad(-gamma);
+  const orientRad = THREE.MathUtils.degToRad(orientDeg);
 
-  euler.set(betaRad, alphaRad, gammaRad, 'YXZ');
-  const q = new THREE.Quaternion().setFromEuler(euler);
-  q.multiply(q1);
-  q.multiply(q0.setFromAxisAngle(zee, -orientRad));
-
-  return new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+  _euler.set(betaRad, alphaRad, gammaRad, 'YXZ');
+  out.setFromEuler(_euler);
+  out.multiply(_q1); // Camera looks out the back of the phone
+  out.multiply(_q0.setFromAxisAngle(_zee, -orientRad)); // Screen orientation compensation
 }
 
-function dirToYawPitch(forward: THREE.Vector3) {
-  const yaw = THREE.MathUtils.radToDeg(Math.atan2(forward.x, -forward.z));
-  const pitch = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1)));
-  return { yaw, pitch };
+// Get Screen Orientation angle in degrees
+function getScreenOrientationAngle(): number {
+  if (typeof window !== 'undefined' && window.screen && window.screen.orientation && window.screen.orientation.angle !== undefined) {
+    return window.screen.orientation.angle;
+  }
+  if (typeof window !== 'undefined' && typeof window.orientation !== 'undefined') {
+    return Number(window.orientation) || 0;
+  }
+  return 0;
 }
 
 interface PanoramaViewerProps {
@@ -143,10 +154,10 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
   const CURVED_ARC_RAD = (CURVED_ARC_DEG * Math.PI) / 180;
   const CYLINDER_HEIGHT = Math.max((RADIUS * CURVED_ARC_RAD) / 2.0, 1350);
 
-  // Camera State with target values for smooth damping
-  const stateRef = useRef({
-    yaw: 0,           // in degrees: 0 = looking at Central Vrindavan, <0 = left, >0 = right
-    pitch: 0,         // in degrees: 0 = horizon, >0 = looking up, <0 = looking down
+  // Touch & Manual Orientation State
+  const touchStateRef = useRef({
+    yaw: 0,           // in degrees (0 = Central Vrindavan)
+    pitch: 0,         // in degrees
     fov: 60,          // field of view (default 60°)
     targetYaw: 0,
     targetPitch: 0,
@@ -161,28 +172,34 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
     isPinching: false
   });
 
-  // Gyroscope tracking ref with relative auto-calibration
+  // Device Gyroscope tracking ref with Quaternion baseline calibration
   const gyroRef = useRef({
+    alpha: 0,
+    beta: 0,
+    gamma: 0,
+    hasData: false,
     hasCalibrated: false,
-    baseYaw: 0,
-    basePitch: 0,
-    lastDeviceYaw: 0,
-    lastDevicePitch: 0,
+    baseYawOffset: 0, // horizontal yaw offset in radians to align phone with Central Vrindavan
     detected: false
   });
 
-  // Dynamically calculate camera limits to guarantee ZERO black borders
+  // Quaternions allocated once to prevent GC stutters
+  const quatTarget = useRef(new THREE.Quaternion());
+  const quatDevice = useRef(new THREE.Quaternion());
+  const quatYawOffset = useRef(new THREE.Quaternion());
+
+  // Dynamically calculate camera limits
   const getLimits = useCallback(() => {
-    const fov = stateRef.current.targetFov;
+    const fov = touchStateRef.current.targetFov;
     const aspect = cameraRef.current ? cameraRef.current.aspect : 16 / 9;
 
     if (projectionMode === 'sphere') {
       return {
         minYaw: -Infinity,
         maxYaw: Infinity,
-        minPitch: -38,
-        maxPitch: 38,
-        minFov: 42,
+        minPitch: -85, // Full vertical freedom to look down at rangoli
+        maxPitch: 85,  // Full vertical freedom to look up at tree canopy
+        minFov: 38,
         maxFov: 80,
       };
     } else {
@@ -194,7 +211,7 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
       // Max yaw so the camera frustum stays inside the 260° arc
       const maxYaw = Math.max(15, (CURVED_ARC_DEG - fovHDeg) / 2 - 2);
 
-      // Max pitch so the camera never looks past the top/bottom cylinder edge
+      // Max pitch so the camera never looks past the cylinder top/bottom edge
       const cylinderHalfAngleDeg = THREE.MathUtils.radToDeg(Math.atan((CYLINDER_HEIGHT / 2) / RADIUS));
       const maxPitch = Math.max(12, cylinderHalfAngleDeg - fov / 2 - 3);
 
@@ -203,11 +220,24 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
         maxYaw: maxYaw,
         minPitch: -maxPitch,
         maxPitch: maxPitch,
-        minFov: 42,
+        minFov: 38,
         maxFov: 80,
       };
     }
   }, [projectionMode, CYLINDER_HEIGHT]);
+
+  // Calibrate Gyro Boresight: Aligns current phone heading to Central Vrindavan (0, 0, -1)
+  const calibrateGyroBoresight = useCallback((deviceQuat: THREE.Quaternion) => {
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(deviceQuat);
+    const currentAzimuth = Math.atan2(fwd.x, fwd.z);
+    // Align forward vector to -Z (atan2(0, -1) = Math.PI)
+    gyroRef.current.baseYawOffset = Math.PI - currentAzimuth;
+    touchStateRef.current.targetYaw = 0;
+    touchStateRef.current.yaw = 0;
+    touchStateRef.current.targetPitch = 0;
+    touchStateRef.current.pitch = 0;
+    gyroRef.current.hasCalibrated = true;
+  }, []);
 
   // Handle Full-Bleed Resizing
   const handleResize = useCallback(() => {
@@ -223,13 +253,13 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
     rendererRef.current.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
     const limits = getLimits();
-    stateRef.current.targetYaw = THREE.MathUtils.clamp(
-      stateRef.current.targetYaw,
+    touchStateRef.current.targetYaw = THREE.MathUtils.clamp(
+      touchStateRef.current.targetYaw,
       limits.minYaw,
       limits.maxYaw
     );
-    stateRef.current.targetPitch = THREE.MathUtils.clamp(
-      stateRef.current.targetPitch,
+    touchStateRef.current.targetPitch = THREE.MathUtils.clamp(
+      touchStateRef.current.targetPitch,
       limits.minPitch,
       limits.maxPitch
     );
@@ -341,59 +371,34 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
   useEffect(() => {
     if (!isGyroActive) {
       gyroRef.current.hasCalibrated = false;
+      gyroRef.current.hasData = false;
       return;
     }
 
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.alpha === null || e.beta === null) return;
 
-      if (!gyroRef.current.detected) {
+      if (!gyroRef.current.hasData) {
+        gyroRef.current.hasData = true;
         gyroRef.current.detected = true;
         if (onGyroSensorDetected) onGyroSensorDetected(true);
       }
 
-      const alpha = e.alpha || 0;
-      const beta = e.beta || 0;
-      const gamma = e.gamma || 0;
-
-      // Screen orientation angle (portrait vs landscape)
-      let screenAngle = 0;
-      if (window.screen && window.screen.orientation && window.screen.orientation.angle !== undefined) {
-        screenAngle = window.screen.orientation.angle;
-      } else if (typeof window.orientation !== 'undefined') {
-        screenAngle = Number(window.orientation) || 0;
-      }
-
-      const forward = getDeviceDirection(alpha, beta, gamma, screenAngle);
-      const { yaw: rawDeviceYaw, pitch: rawDevicePitch } = dirToYawPitch(forward);
-
-      const gyro = gyroRef.current;
-      const state = stateRef.current;
-
-      // Auto-calibrate relative baseline on initial reading
-      if (!gyro.hasCalibrated) {
-        gyro.baseYaw = state.targetYaw - rawDeviceYaw;
-        gyro.basePitch = state.targetPitch - rawDevicePitch;
-        gyro.hasCalibrated = true;
-      }
-
-      gyro.lastDeviceYaw = rawDeviceYaw;
-      gyro.lastDevicePitch = rawDevicePitch;
-
-      // If user is not currently touch-dragging, follow gyroscope
-      if (!state.isInteracting) {
-        state.targetYaw = gyro.baseYaw + rawDeviceYaw;
-        state.targetPitch = gyro.basePitch + rawDevicePitch;
-      }
+      gyroRef.current.alpha = e.alpha ?? 0;
+      gyroRef.current.beta = e.beta ?? 0;
+      gyroRef.current.gamma = e.gamma ?? 0;
     };
 
     window.addEventListener('deviceorientation', handleOrientation, true);
+    window.addEventListener('deviceorientationabsolute', handleOrientation as EventListener, true);
+
     return () => {
       window.removeEventListener('deviceorientation', handleOrientation, true);
+      window.removeEventListener('deviceorientationabsolute', handleOrientation as EventListener, true);
     };
   }, [isGyroActive, onGyroSensorDetected]);
 
-  // Initialize Three.js
+  // Initialize Three.js Engine
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
 
@@ -452,7 +457,7 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
       }
     );
 
-    // Main Animation Loop
+    // Main 60FPS / 120FPS Animation Loop
     let lastTime = performance.now();
     const animate = (time: number) => {
       animFrameIdRef.current = requestAnimationFrame(animate);
@@ -460,57 +465,99 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
       const delta = Math.min((time - lastTime) / 1000, 0.1);
       lastTime = time;
 
-      const state = stateRef.current;
+      const touch = touchStateRef.current;
       const limits = getLimits();
+      const gyro = gyroRef.current;
 
-      // Apply Inertia & Momentum when user is not actively dragging or using gyro
-      if (!state.isInteracting && !isGyroActive) {
-        state.targetYaw += state.velocityX;
-        state.targetPitch += state.velocityY;
+      // Handle Gyroscope vs Touch Quaternion Computation
+      if (isGyroActive && gyro.hasData) {
+        const screenAngle = getScreenOrientationAngle();
+        computeDeviceQuaternion(gyro.alpha, gyro.beta, gyro.gamma, screenAngle, quatDevice.current);
 
-        state.velocityX *= 0.90;
-        state.velocityY *= 0.90;
+        // Auto-calibrate on first valid device frame
+        if (!gyro.hasCalibrated) {
+          calibrateGyroBoresight(quatDevice.current);
+        }
 
-        if (Math.abs(state.velocityX) < 0.001) state.velocityX = 0;
-        if (Math.abs(state.velocityY) < 0.001) state.velocityY = 0;
+        // Apply touch offset around the true world vertical axis (0, 1, 0)
+        const totalYawRad = gyro.baseYawOffset + THREE.MathUtils.degToRad(touch.targetYaw);
+        quatYawOffset.current.setFromAxisAngle(_worldY, totalYawRad);
+
+        // Target orientation combines world horizontal rotation with device motion
+        quatTarget.current.copy(quatYawOffset.current).multiply(quatDevice.current);
+
+        // If in curved mode, constrain view to cylinder boundaries
+        if (projectionMode === 'curved') {
+          const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(quatTarget.current);
+          let currentYaw = THREE.MathUtils.radToDeg(Math.atan2(fwd.x, -fwd.z));
+          let currentPitch = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(fwd.y, -1, 1)));
+
+          const clampedYaw = THREE.MathUtils.clamp(currentYaw, limits.minYaw, limits.maxYaw);
+          const clampedPitch = THREE.MathUtils.clamp(currentPitch, limits.minPitch, limits.maxPitch);
+
+          if (clampedYaw !== currentYaw || clampedPitch !== currentPitch) {
+            _euler.set(THREE.MathUtils.degToRad(clampedPitch), THREE.MathUtils.degToRad(clampedYaw), 0, 'YXZ');
+            quatTarget.current.setFromEuler(_euler);
+          }
+        }
+      } else {
+        // Gyro is off: apply inertia & damping to touch drag
+        if (!touch.isInteracting) {
+          touch.targetYaw += touch.velocityX;
+          touch.targetPitch += touch.velocityY;
+
+          touch.velocityX *= 0.90;
+          touch.velocityY *= 0.90;
+
+          if (Math.abs(touch.velocityX) < 0.001) touch.velocityX = 0;
+          if (Math.abs(touch.velocityY) < 0.001) touch.velocityY = 0;
+        }
+
+        // Clamp target values within projection limits
+        if (projectionMode === 'curved') {
+          touch.targetYaw = THREE.MathUtils.clamp(touch.targetYaw, limits.minYaw, limits.maxYaw);
+        }
+        touch.targetPitch = THREE.MathUtils.clamp(touch.targetPitch, limits.minPitch, limits.maxPitch);
+
+        // Smooth Lerp Damping
+        const lerpFactor = 1 - Math.exp(-14 * delta);
+        touch.yaw += (touch.targetYaw - touch.yaw) * lerpFactor;
+        touch.pitch += (touch.targetPitch - touch.pitch) * lerpFactor;
+
+        // Construct target quaternion directly from Euler angles
+        _euler.set(
+          THREE.MathUtils.degToRad(touch.pitch),
+          THREE.MathUtils.degToRad(touch.yaw),
+          0,
+          'YXZ'
+        );
+        quatTarget.current.setFromEuler(_euler);
       }
 
-      // Clamp target values within safe bounds
-      if (projectionMode === 'curved') {
-        state.targetYaw = THREE.MathUtils.clamp(state.targetYaw, limits.minYaw, limits.maxYaw);
-      }
-      state.targetPitch = THREE.MathUtils.clamp(state.targetPitch, limits.minPitch, limits.maxPitch);
-      state.targetFov = THREE.MathUtils.clamp(state.targetFov, limits.minFov, limits.maxFov);
+      // Smooth FOV interpolation
+      touch.targetFov = THREE.MathUtils.clamp(touch.targetFov, limits.minFov, limits.maxFov);
+      touch.fov += (touch.targetFov - touch.fov) * (1 - Math.exp(-12 * delta));
 
-      // Smooth Lerp Damping
-      const lerpSpeed = isGyroActive ? 16 : 12;
-      const lerpFactor = 1 - Math.exp(-lerpSpeed * delta);
-      state.yaw += (state.targetYaw - state.yaw) * lerpFactor;
-      state.pitch += (state.targetPitch - state.pitch) * lerpFactor;
-      state.fov += (state.targetFov - state.fov) * lerpFactor;
-
-      // Update Camera FOV
-      if (Math.abs(camera.fov - state.fov) > 0.01) {
-        camera.fov = state.fov;
+      if (Math.abs(camera.fov - touch.fov) > 0.01) {
+        camera.fov = touch.fov;
         camera.updateProjectionMatrix();
       }
 
-      // Camera LookAt
-      const yawRad = THREE.MathUtils.degToRad(state.yaw);
-      const pitchRad = THREE.MathUtils.degToRad(state.pitch);
+      // Smooth Slerp: Traverses the shortest spherical geodesic on S^3
+      // Guaranteed ZERO gimbal lock, ZERO NaN matrices, and ZERO angle-wrapping jumps!
+      const slerpFactor = isGyroActive ? Math.min(1, 24 * delta) : Math.min(1, 14 * delta);
+      camera.quaternion.slerp(quatTarget.current, slerpFactor);
 
-      const targetX = Math.sin(yawRad) * Math.cos(pitchRad);
-      const targetY = Math.sin(pitchRad);
-      const targetZ = -Math.cos(yawRad) * Math.cos(pitchRad);
-
-      camera.lookAt(targetX, targetY, targetZ);
-
-      // Render
+      // Render Scene
       renderer.render(scene, camera);
 
-      // Notify parent of heading
+      // Extract Current Camera Direction for UI & Compass
+      const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      const currentYawDeg = THREE.MathUtils.radToDeg(Math.atan2(camFwd.x, -camFwd.z));
+      const currentPitchDeg = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(camFwd.y, -1, 1)));
+
       if (onHeadingChange) {
-        onHeadingChange(state.yaw, state.pitch, state.fov);
+        onHeadingChange(currentYawDeg, currentPitchDeg, camera.fov);
       }
 
       // Update Hotspot Screen Positions
@@ -555,20 +602,20 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
 
       renderer.dispose();
     };
-  }, [imageSrc, getLimits, handleResize, updateHotspotPositions, updateGeometry, onHeadingChange, onLoaded, isGyroActive]);
+  }, [imageSrc, getLimits, handleResize, updateHotspotPositions, updateGeometry, onHeadingChange, onLoaded, isGyroActive, calibrateGyroBoresight, projectionMode]);
 
   // Rebuild geometry when projectionMode changes
   useEffect(() => {
     if (sceneRef.current && textureRef.current) {
       updateGeometry(sceneRef.current, textureRef.current);
       const limits = getLimits();
-      stateRef.current.targetYaw = THREE.MathUtils.clamp(
-        stateRef.current.targetYaw,
+      touchStateRef.current.targetYaw = THREE.MathUtils.clamp(
+        touchStateRef.current.targetYaw,
         limits.minYaw,
         limits.maxYaw
       );
-      stateRef.current.targetPitch = THREE.MathUtils.clamp(
-        stateRef.current.targetPitch,
+      touchStateRef.current.targetPitch = THREE.MathUtils.clamp(
+        touchStateRef.current.targetPitch,
         limits.minPitch,
         limits.maxPitch
       );
@@ -578,17 +625,18 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
   // Handle External Reset View Trigger
   useEffect(() => {
     if (resetTrigger > 0) {
-      const state = stateRef.current;
-      state.targetYaw = 0;
-      state.targetPitch = 0;
-      state.targetFov = 60;
-      state.velocityX = 0;
-      state.velocityY = 0;
+      const touch = touchStateRef.current;
+      touch.targetYaw = 0;
+      touch.yaw = 0;
+      touch.targetPitch = 0;
+      touch.pitch = 0;
+      touch.targetFov = 60;
+      touch.velocityX = 0;
+      touch.velocityY = 0;
 
-      // Re-zero gyro baseline relative to central sanctum
-      if (gyroRef.current.hasCalibrated) {
-        gyroRef.current.baseYaw = -gyroRef.current.lastDeviceYaw;
-        gyroRef.current.basePitch = -gyroRef.current.lastDevicePitch;
+      // Re-zero gyro baseline so phone's current direction faces Central Vrindavan
+      if (gyroRef.current.hasData) {
+        gyroRef.current.hasCalibrated = false;
       }
     }
   }, [resetTrigger]);
@@ -596,18 +644,18 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
   // Handle External Zoom In Trigger
   useEffect(() => {
     if (zoomInTrigger > 0) {
-      const state = stateRef.current;
+      const touch = touchStateRef.current;
       const limits = getLimits();
-      state.targetFov = Math.max(limits.minFov, state.targetFov - 8);
+      touch.targetFov = Math.max(limits.minFov, touch.targetFov - 8);
     }
   }, [zoomInTrigger, getLimits]);
 
   // Handle External Zoom Out Trigger
   useEffect(() => {
     if (zoomOutTrigger > 0) {
-      const state = stateRef.current;
+      const touch = touchStateRef.current;
       const limits = getLimits();
-      state.targetFov = Math.min(limits.maxFov, state.targetFov + 8);
+      touch.targetFov = Math.min(limits.maxFov, touch.targetFov + 8);
     }
   }, [zoomOutTrigger, getLimits]);
 
@@ -618,21 +666,21 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     pointerMap.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    const state = stateRef.current;
-    state.isInteracting = true;
-    state.hasInteracted = true;
-    state.velocityX = 0;
-    state.velocityY = 0;
+    const touch = touchStateRef.current;
+    touch.isInteracting = true;
+    touch.hasInteracted = true;
+    touch.velocityX = 0;
+    touch.velocityY = 0;
 
     if (pointerMap.current.size === 1) {
-      state.lastPointerX = e.clientX;
-      state.lastPointerY = e.clientY;
-      state.isPinching = false;
+      touch.lastPointerX = e.clientX;
+      touch.lastPointerY = e.clientY;
+      touch.isPinching = false;
     } else if (pointerMap.current.size === 2) {
       const points = Array.from(pointerMap.current.values());
       const dist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-      state.pinchDistance = dist;
-      state.isPinching = true;
+      touch.pinchDistance = dist;
+      touch.isPinching = true;
     }
   };
 
@@ -640,47 +688,45 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
     if (!pointerMap.current.has(e.pointerId)) return;
     pointerMap.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    const state = stateRef.current;
+    const touch = touchStateRef.current;
 
-    if (pointerMap.current.size === 2 && state.isPinching) {
+    if (pointerMap.current.size === 2 && touch.isPinching) {
       const points = Array.from(pointerMap.current.values());
       const dist = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-      const deltaDist = dist - state.pinchDistance;
-      state.pinchDistance = dist;
+      const deltaDist = dist - touch.pinchDistance;
+      touch.pinchDistance = dist;
 
       const zoomSpeed = 0.12;
       const limits = getLimits();
-      state.targetFov = THREE.MathUtils.clamp(
-        state.targetFov - deltaDist * zoomSpeed,
+      touch.targetFov = THREE.MathUtils.clamp(
+        touch.targetFov - deltaDist * zoomSpeed,
         limits.minFov,
         limits.maxFov
       );
       return;
     }
 
-    if (pointerMap.current.size === 1 && !state.isPinching) {
-      const deltaX = e.clientX - state.lastPointerX;
-      const deltaY = e.clientY - state.lastPointerY;
-      state.lastPointerX = e.clientX;
-      state.lastPointerY = e.clientY;
+    if (pointerMap.current.size === 1 && !touch.isPinching) {
+      const deltaX = e.clientX - touch.lastPointerX;
+      const deltaY = e.clientY - touch.lastPointerY;
+      touch.lastPointerX = e.clientX;
+      touch.lastPointerY = e.clientY;
 
-      const fovFactor = state.fov / 60;
+      const fovFactor = touch.fov / 60;
       const sensitivity = 0.15 * fovFactor;
 
       const yawChange = -deltaX * sensitivity;
       const pitchChange = deltaY * sensitivity;
 
-      state.targetYaw += yawChange;
-      state.targetPitch += pitchChange;
+      touch.targetYaw += yawChange;
 
-      // Update gyro offset so touch adjustments smoothly blend with sensor
-      if (isGyroActive && gyroRef.current.hasCalibrated) {
-        gyroRef.current.baseYaw += yawChange;
-        gyroRef.current.basePitch += pitchChange;
+      // Vertical drag adjusts pitch only when gyro is off (in gyro, phone pitch tracks naturally)
+      if (!isGyroActive) {
+        touch.targetPitch += pitchChange;
       }
 
-      state.velocityX = yawChange * 0.40;
-      state.velocityY = pitchChange * 0.40;
+      touch.velocityX = yawChange * 0.40;
+      touch.velocityY = pitchChange * 0.40;
     }
   };
 
@@ -692,26 +738,26 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
     }
     pointerMap.current.delete(e.pointerId);
 
-    const state = stateRef.current;
+    const touch = touchStateRef.current;
     if (pointerMap.current.size === 0) {
-      state.isInteracting = false;
-      state.isPinching = false;
+      touch.isInteracting = false;
+      touch.isPinching = false;
     } else if (pointerMap.current.size === 1) {
       const remaining = Array.from(pointerMap.current.values())[0];
-      state.lastPointerX = remaining.x;
-      state.lastPointerY = remaining.y;
-      state.isPinching = false;
+      touch.lastPointerX = remaining.x;
+      touch.lastPointerY = remaining.y;
+      touch.isPinching = false;
     }
   };
 
   // Mouse Wheel Zoom
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const state = stateRef.current;
+    const touch = touchStateRef.current;
     const limits = getLimits();
     const zoomAmount = e.deltaY * 0.04;
-    state.targetFov = THREE.MathUtils.clamp(
-      state.targetFov + zoomAmount,
+    touch.targetFov = THREE.MathUtils.clamp(
+      touch.targetFov + zoomAmount,
       limits.minFov,
       limits.maxFov
     );
@@ -722,7 +768,7 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
       ref={containerRef}
       className="viewer-container"
       style={{
-        cursor: stateRef.current.isInteracting ? 'grabbing' : 'grab',
+        cursor: touchStateRef.current.isInteracting ? 'grabbing' : 'grab',
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -730,9 +776,7 @@ export const PanoramaViewer: React.FC<PanoramaViewerProps> = ({
       onPointerCancel={handlePointerUp}
       onWheel={handleWheel}
     >
-      <canvas
-        ref={canvasRef}
-      />
+      <canvas ref={canvasRef} />
 
       {/* Loading Overlay */}
       {!isLoaded && !errorMsg && (
