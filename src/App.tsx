@@ -144,29 +144,16 @@ export default function App() {
       />
 
       {/* TOP BAR OVERLAY */}
-      <header
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          padding: '16px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          pointerEvents: 'none',
-          zIndex: 40,
-          background: 'linear-gradient(to bottom, rgba(14, 9, 7, 0.75) 0%, rgba(14, 9, 7, 0) 100%)'
-        }}
-      >
+      <header className="app-header">
         {/* Top-Left Title */}
-        <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div className="app-title-group">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span
+              className="app-title-text"
               style={{
                 fontFamily: 'var(--font-serif)',
                 fontWeight: 700,
-                fontSize: '1.25rem',
+                fontSize: '1.2rem',
                 letterSpacing: '0.12em',
                 color: '#FAF6F0',
                 textTransform: 'uppercase',
@@ -176,6 +163,7 @@ export default function App() {
               Tulsi Courtyard
             </span>
             <span
+              className="app-badge-text"
               style={{
                 fontSize: '0.65rem',
                 padding: '2px 8px',
@@ -192,6 +180,7 @@ export default function App() {
             </span>
           </div>
           <span
+            className="app-subtitle-text"
             style={{
               fontSize: '0.74rem',
               color: 'var(--color-sandstone)',
@@ -205,14 +194,7 @@ export default function App() {
         </div>
 
         {/* Top-Right Controls */}
-        <div
-          style={{
-            pointerEvents: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-        >
+        <div className="app-header-controls">
           {/* Projection Mode Switcher Pill */}
           <ProjectionToggle mode={projectionMode} onChange={setProjectionMode} />
 
@@ -289,54 +271,9 @@ export default function App() {
       )}
 
       {/* BOTTOM OVERLAY */}
-      <footer
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: '16px 20px',
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          pointerEvents: 'none',
-          zIndex: 40,
-          background: 'linear-gradient(to top, rgba(14, 9, 7, 0.8) 0%, rgba(14, 9, 7, 0) 100%)'
-        }}
-      >
+      <footer className="app-footer">
         {/* Bottom-Left: "Drag to explore" and Compass */}
-        <div
-          style={{
-            pointerEvents: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10
-          }}
-        >
-          {/* Helper hint */}
-          <div
-            className="glass-pill"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '6px 14px',
-              borderRadius: 20,
-              fontSize: '0.75rem',
-              color: 'var(--color-warm-beige)',
-              opacity: hasInteracted ? 0.45 : 0.95,
-              transition: 'opacity 0.6s ease',
-              width: 'fit-content'
-            }}
-          >
-            <MoveHorizontal size={15} style={{ color: '#E5A84B' }} />
-            <span>
-              {isGyroActive
-                ? 'Device motion active • Move device or drag • Pinch to zoom'
-                : 'Drag horizontally or tap Gyro to explore • Pinch to zoom'}
-            </span>
-          </div>
-
+        <div className="app-footer-left">
           {/* Compass / Orientation indicator */}
           <CourtyardCompass
             yaw={yaw}
@@ -344,29 +281,46 @@ export default function App() {
             fov={fov}
             onReset={() => setResetCount((c) => c + 1)}
           />
+
+          {/* Helper hint */}
+          <div
+            className="glass-pill helper-pill-mobile"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 20,
+              fontSize: '0.74rem',
+              color: 'var(--color-warm-beige)',
+              opacity: hasInteracted ? 0.45 : 0.95,
+              transition: 'opacity 0.6s ease',
+              width: 'fit-content'
+            }}
+          >
+            <MoveHorizontal size={14} style={{ color: '#E5A84B', flexShrink: 0 }} />
+            <span>
+              {isGyroActive
+                ? 'Device motion active • Move device or drag'
+                : 'Drag or tap Gyro to explore • Pinch to zoom'}
+            </span>
+          </div>
         </div>
 
         {/* Bottom-Right: Camera controls */}
-        <div
-          style={{
-            pointerEvents: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-        >
+        <div className="app-footer-right">
           {/* Gyroscope Motion Tracking Button */}
           <button
             onClick={toggleGyro}
             className="glass-pill"
             title={isGyroActive ? 'Disable Device Gyroscope' : 'Follow Device Motion (Gyroscope)'}
             style={{
-              padding: '0 14px',
+              padding: '0 12px',
               height: 38,
               borderRadius: 20,
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               color: isGyroActive ? '#FFFFFF' : 'var(--color-ivory)',
               background: isGyroActive ? 'linear-gradient(135deg, #D46129 0%, #A84116 100%)' : undefined,
               border: isGyroActive ? '1px solid rgba(255, 230, 200, 0.45)' : '1px solid rgba(229, 168, 75, 0.3)',
@@ -374,7 +328,7 @@ export default function App() {
                 ? '0 2px 10px rgba(0,0,0,0.4), 0 0 16px rgba(212, 97, 41, 0.5), inset 0 1px 1px rgba(255,255,255,0.3)'
                 : undefined,
               cursor: 'pointer',
-              fontSize: '0.78rem',
+              fontSize: '0.76rem',
               fontWeight: 600,
               transition: 'all 0.25s ease'
             }}
@@ -382,10 +336,34 @@ export default function App() {
             <Compass
               size={15}
               style={{
-                color: isGyroActive ? '#FFE8D6' : '#E5A84B'
+                color: isGyroActive ? '#FFE8D6' : '#E5A84B',
+                flexShrink: 0
               }}
             />
-            <span>{isGyroActive ? 'Gyro Active' : 'Gyro'}</span>
+            <span>{isGyroActive ? 'Gyro On' : 'Gyro'}</span>
+          </button>
+
+          {/* Reset Camera to Center */}
+          <button
+            onClick={() => setResetCount((c) => c + 1)}
+            className="glass-pill"
+            title="Reset to Central Sanctum"
+            style={{
+              padding: '0 12px',
+              height: 38,
+              borderRadius: 20,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              color: 'var(--color-ivory)',
+              cursor: 'pointer',
+              border: '1px solid rgba(229, 168, 75, 0.3)',
+              fontSize: '0.76rem',
+              fontWeight: 600
+            }}
+          >
+            <RotateCcw size={14} style={{ color: '#E5A84B', flexShrink: 0 }} />
+            <span>Reset</span>
           </button>
 
           {/* Zoom In */}
@@ -405,7 +383,7 @@ export default function App() {
               border: '1px solid rgba(238, 219, 204, 0.2)'
             }}
           >
-            <ZoomIn size={17} />
+            <ZoomIn size={16} />
           </button>
 
           {/* Zoom Out */}
@@ -425,30 +403,7 @@ export default function App() {
               border: '1px solid rgba(238, 219, 204, 0.2)'
             }}
           >
-            <ZoomOut size={17} />
-          </button>
-
-          {/* Reset Camera to Center */}
-          <button
-            onClick={() => setResetCount((c) => c + 1)}
-            className="glass-pill"
-            title="Reset to Central Sanctum"
-            style={{
-              padding: '0 14px',
-              height: 38,
-              borderRadius: 20,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              color: 'var(--color-ivory)',
-              cursor: 'pointer',
-              border: '1px solid rgba(229, 168, 75, 0.3)',
-              fontSize: '0.78rem',
-              fontWeight: 600
-            }}
-          >
-            <RotateCcw size={15} style={{ color: '#E5A84B' }} />
-            <span>Reset</span>
+            <ZoomOut size={16} />
           </button>
 
           {/* Fullscreen Toggle */}
@@ -468,7 +423,7 @@ export default function App() {
               border: '1px solid rgba(238, 219, 204, 0.2)'
             }}
           >
-            {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
         </div>
       </footer>

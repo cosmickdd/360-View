@@ -10,11 +10,12 @@ interface ProjectionToggleProps {
 export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChange }) => {
   return (
     <div
+      className="projection-toggle-bar"
       style={{
         position: 'relative',
         display: 'inline-flex',
         alignItems: 'center',
-        padding: 3,
+        padding: 2,
         borderRadius: 30,
         background: 'rgba(18, 12, 10, 0.78)',
         backdropFilter: 'blur(16px)',
@@ -28,10 +29,10 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
       <div
         style={{
           position: 'absolute',
-          top: 3,
-          bottom: 3,
-          left: mode === 'sphere' ? 3 : '50%',
-          width: 'calc(50% - 3px)',
+          top: 2,
+          bottom: 2,
+          left: mode === 'sphere' ? 2 : '50%',
+          width: 'calc(50% - 2px)',
           borderRadius: 24,
           background: 'linear-gradient(135deg, #D46129 0%, #A84116 100%)',
           border: '1px solid rgba(255, 230, 200, 0.35)',
@@ -46,7 +47,7 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
         }}
       />
 
-      {/* Option 1 (Primary / First): 360° Sphere */}
+      {/* Option 1: 360° Sphere */}
       <button
         type="button"
         onClick={() => onChange('sphere')}
@@ -56,8 +57,8 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
-          padding: '6px 15px',
+          gap: 5,
+          padding: '6px 12px',
           borderRadius: 24,
           border: 'none',
           background: 'transparent',
@@ -65,7 +66,7 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
           outline: 'none',
           color: mode === 'sphere' ? '#FFFFFF' : 'rgba(238, 219, 204, 0.7)',
           fontFamily: 'var(--font-sans)',
-          fontSize: '0.78rem',
+          fontSize: '0.74rem',
           fontWeight: mode === 'sphere' ? 700 : 500,
           letterSpacing: '0.02em',
           textShadow: mode === 'sphere' ? '0 1px 2px rgba(0, 0, 0, 0.5)' : 'none',
@@ -80,17 +81,18 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
         }}
       >
         <Globe
-          size={14}
+          size={13}
           style={{
             opacity: mode === 'sphere' ? 1 : 0.75,
             transition: 'opacity 0.2s ease',
-            color: mode === 'sphere' ? '#FFE8D6' : 'currentColor'
+            color: mode === 'sphere' ? '#FFE8D6' : 'currentColor',
+            flexShrink: 0
           }}
         />
         <span>360° Sphere</span>
       </button>
 
-      {/* Option 2 (Secondary / Second): Curved Panorama */}
+      {/* Option 2: Curved Panorama */}
       <button
         type="button"
         onClick={() => onChange('curved')}
@@ -100,8 +102,8 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
-          padding: '6px 15px',
+          gap: 5,
+          padding: '6px 12px',
           borderRadius: 24,
           border: 'none',
           background: 'transparent',
@@ -109,7 +111,7 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
           outline: 'none',
           color: mode === 'curved' ? '#FFFFFF' : 'rgba(238, 219, 204, 0.7)',
           fontFamily: 'var(--font-sans)',
-          fontSize: '0.78rem',
+          fontSize: '0.74rem',
           fontWeight: mode === 'curved' ? 700 : 500,
           letterSpacing: '0.02em',
           textShadow: mode === 'curved' ? '0 1px 2px rgba(0, 0, 0, 0.5)' : 'none',
@@ -135,12 +137,13 @@ export const ProjectionToggle: React.FC<ProjectionToggleProps> = ({ mode, onChan
           style={{
             opacity: mode === 'curved' ? 1 : 0.75,
             transition: 'opacity 0.2s ease',
-            color: mode === 'curved' ? '#FFE8D6' : 'currentColor'
+            color: mode === 'curved' ? '#FFE8D6' : 'currentColor',
+            flexShrink: 0
           }}
         >
           <path d="M2 7c3.5-1.5 7.5-2 10-2s6.5.5 10 2v10c-3.5-1.5-7.5-2-10-2s-6.5.5-10 2V7z" />
         </svg>
-        <span>Curved Panorama</span>
+        <span>Curved</span>
       </button>
     </div>
   );

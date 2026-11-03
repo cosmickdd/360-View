@@ -70,11 +70,11 @@ export const CourtyardCompass: React.FC<CourtyardCompassProps> = ({ yaw }) => {
         />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', whiteSpace: 'nowrap' }}>
         <span
           style={{
             fontWeight: 600,
-            fontSize: '0.78rem',
+            fontSize: '0.76rem',
             color: '#FAF6F0',
             letterSpacing: '0.02em',
             lineHeight: 1.2
@@ -84,9 +84,9 @@ export const CourtyardCompass: React.FC<CourtyardCompassProps> = ({ yaw }) => {
         </span>
         <span
           style={{
-            fontSize: '0.68rem',
+            fontSize: '0.66rem',
             color: 'var(--color-sandstone)',
-            opacity: 0.8,
+            opacity: 0.85,
             lineHeight: 1.1
           }}
         >

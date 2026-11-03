@@ -27,7 +27,7 @@ export const HotspotCard: React.FC<HotspotCardProps> = ({ hotspot, onClose }) =>
     <div
       style={{
         position: 'absolute',
-        bottom: 84,
+        bottom: 'max(92px, calc(env(safe-area-inset-bottom) + 86px))',
         left: '50%',
         transform: 'translateX(-50%)',
         width: '92%',
